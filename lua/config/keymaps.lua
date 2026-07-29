@@ -1,104 +1,93 @@
-local map = vim.keymap.set
+vim.keymap.set("n", "<leader>t", "<cmd>belowright terminal<CR>", {
+	desc = "Open terminal below",
+})
 
--- General
-map("n", "<leader>w", "<cmd>w<cr>", { desc = "Save" })
-map("n", "<leader>q", "<cmd>q<cr>", { desc = "Quit" })
-map("n", "<leader>Q", "<cmd>qa!<cr>", { desc = "Quit All" })
-map("n", "<leader>h", "<cmd>nohlsearch<cr>", { desc = "No Highlight" })
-
--- Window navigation
-map("n", "<C-h>", "<C-w>h", { desc = "Go to Left Window" })
-map("n", "<C-j>", "<C-w>j", { desc = "Go to Lower Window" })
-map("n", "<C-k>", "<C-w>k", { desc = "Go to Upper Window" })
-map("n", "<C-l>", "<C-w>l", { desc = "Go to Right Window" })
-
--- Resize windows
-map("n", "<C-Up>", "<cmd>resize +2<cr>", { desc = "Increase Window Height" })
-map("n", "<C-Down>", "<cmd>resize -2<cr>", { desc = "Decrease Window Height" })
-map("n", "<C-Left>", "<cmd>vertical resize -2<cr>", { desc = "Decrease Window Width" })
-map("n", "<C-Right>", "<cmd>vertical resize +2<cr>", { desc = "Increase Window Width" })
-
--- Buffers
-map("n", "<S-h>", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
-map("n", "<S-l>", "<cmd>bnext<cr>", { desc = "Next Buffer" })
-map("n", "[b", "<cmd>bprevious<cr>", { desc = "Prev Buffer" })
-map("n", "]b", "<cmd>bnext<cr>", { desc = "Next Buffer" })
-map("n", "<leader>bd", "<cmd>bdelete<cr>", { desc = "Delete Buffer" })
-map("n", "<leader>bD", "<cmd>%bd|e#|bd#<cr>", { desc = "Delete Other Buffers" })
-
--- Better indenting
-map("v", "<", "<gv")
-map("v", ">", ">gv")
-
--- Move lines
-map("v", "J", ":m '>+1<cr>gv=gv", { desc = "Move Down" })
-map("v", "K", ":m '<-2<cr>gv=gv", { desc = "Move Up" })
-
--- Quickfix
-map("n", "[q", "<cmd>cprev<cr>", { desc = "Previous Quickfix" })
-map("n", "]q", "<cmd>cnext<cr>", { desc = "Next Quickfix" })
-
--- C/C++ specific
-map("n", "<leader>ch", "<cmd>ClangdSwitchSourceHeader<cr>", { desc = "Switch Header/Source" })
-map("n", "<leader>cs", "<cmd>!ctags -R .<cr>", { desc = "Generate ctags" })
-
--- Theme switching
-local themes = { "tokyonight", "catppuccin", "gruvbox", "kanagawa", "onedark", "everforest" }
-local theme_file = vim.fn.stdpath("config") .. "/.theme"
-
-local function save_theme(theme)
-  local f = io.open(theme_file, "w")
-  if f then
-    f:write(theme)
-    f:close()
+-- Helper: cari directory aktif (Oil-aware, fallback ke file dir, lalu getcwd)
+local function shell_dir()
+  local ok, oil = pcall(require, "oil")
+  if ok then
+    local dir = oil.get_current_dir()
+    if dir then return dir end
   end
+  local file = vim.fn.expand("%:p:h")
+  if file and file ~= "" then return file end
+  return vim.fn.getcwd()
 end
 
-local function load_theme()
-  local f = io.open(theme_file, "r")
-  if f then
-    local theme = f:read("*all")
-    f:close()
-    vim.cmd.colorscheme(theme)
-    return theme
+local _shell_win -- track shell window biar yang lama ketutup
+
+-- Shell command: prompt, capture output, tampilkan di window dinamis (max 10 baris)
+vim.keymap.set("n", "<leader>s", function()
+  local cmd = vim.fn.input("Shell: ")
+  if cmd == "" then return end
+
+  -- Tutup shell window sebelumnya kalau masih ada
+  if _shell_win and vim.api.nvim_win_is_valid(_shell_win) then
+    vim.api.nvim_win_close(_shell_win, true)
   end
-  return nil
-end
 
-local function get_theme_index(theme)
-  for i, t in ipairs(themes) do
-    if t == theme then
-      return i
-    end
+  local dir = shell_dir()
+  local full_cmd = "cd " .. vim.fn.shellescape(dir) .. " && " .. cmd
+
+  -- Capture output
+  local output = vim.fn.system(full_cmd)
+  if vim.v.shell_error ~= 0 then
+    output = output .. "\n[Exit code: " .. vim.v.shell_error .. "]"
   end
-  return 1
-end
 
-local current_theme_index = 1
-
-map("n", "<leader>ut", function()
-  vim.ui.input({
-    prompt = "Enter colorscheme: ",
-    default = "tokyonight",
-    completion = "colorscheme",
-  }, function(input)
-    if input then
-      vim.cmd.colorscheme(input)
-      save_theme(input)
+  -- Refresh oil buffers (biar hasil git clone dll langsung muncul)
+  pcall(function()
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+      for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+        local buf = vim.api.nvim_win_get_buf(win)
+        if vim.bo[buf].filetype == "oil" then
+          vim.api.nvim_win_call(win, function()
+            vim.cmd.edit({ bang = true })
+          end)
+        end
+      end
     end
   end)
-end, { desc = "Select Colorscheme" })
 
-map("n", "<leader>tn", function()
-  current_theme_index = (current_theme_index % #themes) + 1
-  local theme = themes[current_theme_index]
-  vim.cmd.colorscheme(theme)
-  save_theme(theme)
-end, { desc = "Next Colorscheme" })
+  -- Split & hitung baris
+  local lines = vim.split(output, "\n", { plain = true })
+  if #lines > 0 and lines[#lines] == "" then
+    table.remove(lines)
+  end
+  local nlines = math.max(#lines, 1)
+  local max_height = 10
+  local height = math.min(nlines, max_height)
 
-map("n", "<leader>tp", function()
-  current_theme_index = ((current_theme_index - 2 + #themes) % #themes) + 1
-  local theme = themes[current_theme_index]
-  vim.cmd.colorscheme(theme)
-  save_theme(theme)
-end, { desc = "Previous Colorscheme" })
+  -- Buka window di bawah
+  vim.cmd("belowright " .. height .. "new")
+
+  local buf = vim.api.nvim_get_current_buf()
+  local win = vim.api.nvim_get_current_win()
+  _shell_win = win
+
+  -- Config buffer
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].modifiable = true
+
+  -- Isi output
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+
+  -- Statusline: -- SHELL -- {command} @ {dir}
+  local display = dir:match("[^/]+$") or dir
+  vim.wo[win].statusline = "%#ModeMsg#-- SHELL --%* " .. cmd .. "  (" .. display .. ")"
+
+  -- q → tutup
+  vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = buf, nowait = true, silent = true })
+end, { desc = "Shell command (output below)" })
+
+-- Exit terminal mode (ganti <C-\><C-n> yang ribet)
+vim.keymap.set("t", "<Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
+
+-- Save file
+vim.keymap.set({ "n", "i" }, "<A-s>", "<cmd>w<CR>", { desc = "Save file" })
+
+-- LSP: navigasi
+vim.keymap.set("n", "gd", vim.lsp.buf.definition, { desc = "Go to definition" })
+vim.keymap.set("n", "K", vim.lsp.buf.hover, { desc = "Hover documentation" })

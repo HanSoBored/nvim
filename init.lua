@@ -9,6 +9,8 @@ require("lazy").setup("plugins")
 
 vim.opt.clipboard = "unnamedplus"
 vim.opt.termguicolors = true
+vim.opt.number = true
+vim.opt.relativenumber = true
 
 -- ignore checkhealth nvim warning
 vim.g.loaded_node_provider = 0

@@ -77,6 +77,17 @@ end, { desc = "Shell command (streaming below)" })
 -- Exit terminal mode (ganti <C-\><C-n> yang ribet)
 vim.keymap.set("t", "<Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
 
+-- Esc di insert: tutup popup blink dulu kalau terbuka, tetap di insert;
+-- kalau tidak ada popup, baru keluar insert mode
+vim.keymap.set("i", "<Esc>", function()
+  local blink = require("blink.cmp")
+  if blink.is_menu_visible() then
+    blink.hide()
+  else
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+  end
+end, { desc = "Esc: tutup popup blink / keluar insert" })
+
 -- Save file
 vim.keymap.set({ "n", "i" }, "<A-s>", "<cmd>w<CR>", { desc = "Save file" })
 
@@ -92,3 +103,17 @@ vim.keymap.set("n", "<leader>t[", "<cmd>tabprevious<CR>", { desc = "Previous tab
 
 -- Quit
 vim.keymap.set("n", "<leader>q", "<cmd>q<CR>", { desc = "Quit window" })
+
+-- Clear search highlight
+vim.keymap.set("n", "<leader>nh", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" })
+
+-- Reload config tanpa restart nvim (bersihin cache module config & plugins dulu)
+vim.keymap.set("n", "<leader>sr", function()
+  for mod in pairs(package.loaded) do
+    if mod:match("^config%.") or mod:match("^plugins%.") then
+      package.loaded[mod] = nil
+    end
+  end
+  vim.cmd("source $MYVIMRC")
+  vim.notify("Config reloaded", vim.log.levels.INFO)
+end, { desc = "Reload nvim config" })

@@ -4,7 +4,11 @@ return {
 		dependencies = {
 			"nvim-tree/nvim-web-devicons",
 		},
-		opts = {},
+		opts = {
+			keymaps = {
+				["<F5>"] = "actions.refresh",
+			},
+		},
 		keys = {
 			{
 				"-",

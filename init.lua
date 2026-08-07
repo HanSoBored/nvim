@@ -8,6 +8,23 @@ require("config.keymaps")
 require("lazy").setup("plugins")
 
 vim.opt.clipboard = "unnamedplus"
+
+-- OSC52: kirim yank/paste lewat SSH ke clipboard terminal lokal (laptop)
+local ok_osc52, osc52 = pcall(require, "vim.ui.clipboard.osc52")
+if ok_osc52 then
+  vim.g.clipboard = {
+    name = "OSC52",
+    copy = {
+      ["+"] = osc52.copy("+"),
+      ["*"] = osc52.copy("*"),
+    },
+    paste = {
+      ["+"] = osc52.paste("+"),
+      ["*"] = osc52.paste("*"),
+    },
+  }
+end
+
 vim.opt.termguicolors = true
 vim.opt.number = true
 vim.opt.relativenumber = true
